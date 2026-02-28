@@ -21,7 +21,6 @@ class _FeedScreenState extends State<FeedScreen> {
     super.initState();
     _scrollController = Controller()
       ..addListener((ScrollEvent event) {
-        // event.pageNo is the new page index after a successful scroll
         if (event.pageNo != null) {
           HapticFeedback.lightImpact();
           setState(() => _currentIndex = event.pageNo!);
@@ -33,8 +32,6 @@ class _FeedScreenState extends State<FeedScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.deepNavy,
-      extendBodyBehindAppBar: true,
-      appBar: _buildAppBar(context),
       body: Stack(
         children: [
           // ── TikTok-style vertical snap feed ──────────────────────────────
@@ -47,6 +44,12 @@ class _FeedScreenState extends State<FeedScreen> {
             builder: (BuildContext context, int index) {
               return ByteCard(byte: mockBytes[index]);
             },
+          ),
+
+          // ── AppBar sits on top — pushed higher via SafeArea + custom top ─
+          Positioned(
+            top: 0, left: 0, right: 0,
+            child: _FinBytesAppBar(),
           ),
 
           // ── Progress dots (bottom center) ────────────────────────────────
@@ -63,53 +66,60 @@ class _FeedScreenState extends State<FeedScreen> {
       ),
     );
   }
+}
 
-  PreferredSizeWidget _buildAppBar(BuildContext context) {
-    return AppBar(
-      backgroundColor: Colors.transparent,
-      elevation: 0,
-      systemOverlayStyle: SystemUiOverlayStyle.light,
-      title: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 28,
-            height: 28,
-            decoration: BoxDecoration(
-              color: AppColors.neonGreen,
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Center(
-              child: Text(
-                'F',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w900,
-                  color: AppColors.deepNavy,
+class _FinBytesAppBar extends StatelessWidget {
+  const _FinBytesAppBar();
+
+  @override
+  Widget build(BuildContext context) {
+    // Render above all card content; use SafeArea so it clears the notch,
+    // then add a little extra bottom padding so it sits well above the card top.
+    return SafeArea(
+      bottom: false,
+      child: Padding(
+        // Extra top padding lifts the bar up from the card title
+        padding: const EdgeInsets.only(top: 8, left: 16, right: 8),
+        child: Row(
+          children: [
+            // Logo mark
+            Container(
+              width: 26,
+              height: 26,
+              decoration: BoxDecoration(
+                color: AppColors.neonGreen,
+                borderRadius: BorderRadius.circular(7),
+              ),
+              child: Center(
+                child: Text(
+                  'F',
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w900,
+                    color: AppColors.deepNavy,
+                  ),
                 ),
               ),
             ),
-          ),
-          const SizedBox(width: 8),
-          Text(
-            'FinBytes',
-            style: TextStyle(
-              color: AppColors.textPrimary,
-              fontSize: 20,
-              fontWeight: FontWeight.w700,
-              letterSpacing: -0.3,
+            const SizedBox(width: 8),
+            Text(
+              'FinBytes',
+              style: TextStyle(
+                color: AppColors.textPrimary,
+                fontSize: 19,
+                fontWeight: FontWeight.w700,
+                letterSpacing: -0.3,
+              ),
             ),
-          ),
-        ],
-      ),
-      centerTitle: true,
-      actions: [
-        IconButton(
-          icon: const Icon(Icons.person_outline_rounded,
-              color: AppColors.textSecondary),
-          onPressed: () {},
+            const Spacer(),
+            IconButton(
+              icon: const Icon(Icons.person_outline_rounded,
+                  color: AppColors.textSecondary),
+              onPressed: () {},
+            ),
+          ],
         ),
-      ],
+      ),
     );
   }
 }
