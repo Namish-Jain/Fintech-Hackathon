@@ -1,0 +1,40 @@
+# --- FinBytes MVP Planning & Agent Docs ---
+# Ignore the PRD, Tech Design, and Research files
+docs/PRD-*.md
+docs/TechDesign-*.md
+docs/research-*.txt
+
+# Ignore AI Agent instructions and configurations
+AGENTS.md
+agent_docs/
+.cursorrules
+CLAUDE.md
+GEMINI.md
+.github/copilot-instructions.md
+
+# --- Python / FastAPI (Backend) ---
+__pycache__/
+*.py[cod]
+*$py.class
+.venv
+venv/
+ENV/
+.env
+.pytest_cache/
+
+# --- Flutter / Dart (Frontend) ---
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.pub-cache/
+.pub/
+build/
+ios/Flutter/Generated.xcconfig
+ios/Flutter/flutter_export_environment.sh
+android/key.properties
+*.keystore
+*.jks
+
+# --- Operating System ---
+.DS_Store
+Thumbs.db
