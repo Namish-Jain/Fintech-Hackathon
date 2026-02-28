@@ -1,14 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/byte_model.dart';
 import '../theme/app_theme.dart';
 
 // ─── Providers ────────────────────────────────────────────────────────────────
 
-/// Which content tab is active: 0=Overview 1=ELI5 2=Takeaway 3=Social
 final contentTabProvider = StateProvider.family<int, String>((ref, id) => 0);
-
-/// Whether the category dropdown is open
 final categoryDropdownProvider = StateProvider<bool>((ref) => false);
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -33,19 +31,53 @@ const List<Map<String, String>> _kTabs = [
 
 // ─── ByteCard ─────────────────────────────────────────────────────────────────
 
-class ByteCard extends ConsumerWidget {
+class ByteCard extends ConsumerStatefulWidget {
   final Byte byte;
 
   const ByteCard({super.key, required this.byte});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final activeTab = ref.watch(contentTabProvider(byte.id));
+  ConsumerState<ByteCard> createState() => _ByteCardState();
+}
+
+class _ByteCardState extends ConsumerState<ByteCard> {
+  late final PageController _tabPageController;
+
+  /// Fractional page position: 0.0 = tab 0 fully visible, 1.0 = tab 1, etc.
+  /// Drives the animated divider gradient.
+  double _swipeProgress = 0.0;
+
+  @override
+  void initState() {
+    super.initState();
+    _tabPageController = PageController();
+    _tabPageController.addListener(_onPageScroll);
+  }
+
+  void _onPageScroll() {
+    if (_tabPageController.hasClients && _tabPageController.page != null) {
+      setState(() => _swipeProgress = _tabPageController.page!);
+    }
+  }
+
+  @override
+  void dispose() {
+    _tabPageController.removeListener(_onPageScroll);
+    _tabPageController.dispose();
+    super.dispose();
+  }
+
+  void _onTabSwiped(int page) {
+    HapticFeedback.selectionClick();
+    ref.read(contentTabProvider(widget.byte.id).notifier).state = page;
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final dropdownOpen = ref.watch(categoryDropdownProvider);
     final categoryColor =
-        AppColors.categoryColors[byte.category] ?? AppColors.neonGreen;
+        AppColors.categoryColors[widget.byte.category] ?? AppColors.neonGreen;
     final size = MediaQuery.of(context).size;
-    // Top safe area + appbar height — card starts below the title bar
     final topPadding = MediaQuery.of(context).padding.top + 60;
 
     return SizedBox(
@@ -95,87 +127,65 @@ class ByteCard extends ConsumerWidget {
                       ),
                     ),
 
-                    // Content
+                    // Main content
                     Padding(
-                      padding: const EdgeInsets.fromLTRB(24, 24, 24, 24),
+                      padding: const EdgeInsets.fromLTRB(24, 24, 24, 20),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // ── Category + Source row (slightly lower than before) ──
                           const SizedBox(height: 8),
+
+                          // Badges row
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
                               _CategoryBadge(
-                                label: byte.category,
+                                label: widget.byte.category,
                                 color: categoryColor,
                                 onTap: () => ref
                                     .read(categoryDropdownProvider.notifier)
                                     .state = !dropdownOpen,
                               ),
-                              _SourceBadge(source: byte.source),
+                              _SourceBadge(source: widget.byte.source),
                             ],
                           ),
 
                           const SizedBox(height: 18),
 
-                          // ── Title ───────────────────────────────────────
+                          // Title
                           Text(
-                            byte.title,
+                            widget.byte.title,
                             style: Theme.of(context).textTheme.headlineLarge,
                             maxLines: 3,
                             overflow: TextOverflow.ellipsis,
                           ),
 
-                          const SizedBox(height: 20),
+                          const SizedBox(height: 18),
 
-                          // ── Divider ──────────────────────────────────────
-                          Container(
-                            height: 1,
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                colors: [
-                                  categoryColor.withOpacity(0.6),
-                                  Colors.transparent,
-                                ],
-                              ),
-                            ),
-                          ),
-
-                          const SizedBox(height: 16),
-
-                          // ── Content area ─────────────────────────────────
-                          Expanded(
-                            child: AnimatedSwitcher(
-                              duration: const Duration(milliseconds: 280),
-                              switchInCurve: Curves.easeOutCubic,
-                              switchOutCurve: Curves.easeInCubic,
-                              transitionBuilder: (child, animation) =>
-                                  FadeTransition(
-                                opacity: animation,
-                                child: SlideTransition(
-                                  position: Tween<Offset>(
-                                    begin: const Offset(0, 0.04),
-                                    end: Offset.zero,
-                                  ).animate(animation),
-                                  child: child,
-                                ),
-                              ),
-                              child: _buildContent(
-                                context, activeTab, categoryColor),
-                            ),
-                          ),
-
-                          const SizedBox(height: 16),
-
-                          // ── 4-tab switcher bar ───────────────────────────
-                          _ContentTabBar(
-                            activeTab: activeTab,
+                          // Animated divider — bright spot travels left→right
+                          // as _swipeProgress goes 0→(tabCount-1)
+                          _AnimatedDivider(
                             color: categoryColor,
-                            onTabSelected: (i) => ref
-                                .read(contentTabProvider(byte.id).notifier)
-                                .state = i,
+                            progress: _swipeProgress,
+                            tabCount: _kTabs.length,
                           ),
+
+                          const SizedBox(height: 14),
+
+                          // Swipeable content PageView
+                          Expanded(
+                            child: PageView.builder(
+                              controller: _tabPageController,
+                              itemCount: _kTabs.length,
+                              onPageChanged: _onTabSwiped,
+                              scrollDirection: Axis.horizontal,
+                              itemBuilder: (context, index) {
+                                return _buildTabContent(
+                                    context, index, categoryColor);
+                              },
+                            ),
+                          ),
+                          // No bottom bar — removed
                         ],
                       ),
                     ),
@@ -187,20 +197,14 @@ class ByteCard extends ConsumerWidget {
 
           // ── Category dropdown overlay ─────────────────────────────────────
           if (dropdownOpen) ...[
-            // Scrim — tapping outside closes the dropdown
             Positioned.fill(
               child: GestureDetector(
                 onTap: () => ref
                     .read(categoryDropdownProvider.notifier)
                     .state = false,
-                child: AnimatedOpacity(
-                  opacity: dropdownOpen ? 1.0 : 0.0,
-                  duration: const Duration(milliseconds: 200),
-                  child: Container(color: Colors.black.withOpacity(0.6)),
-                ),
+                child: Container(color: Colors.black.withOpacity(0.6)),
               ),
             ),
-            // Dropdown panel
             Positioned(
               top: topPadding + 20,
               left: 16,
@@ -217,37 +221,78 @@ class ByteCard extends ConsumerWidget {
     );
   }
 
-  Widget _buildContent(BuildContext context, int tab, Color color) {
+  Widget _buildTabContent(BuildContext context, int tab, Color color) {
     switch (tab) {
       case 0:
-        return _BulletList(
-          key: const ValueKey('overview'),
-          bullets: byte.summaryBullets,
-          color: color,
+        return SingleChildScrollView(
+          physics: const BouncingScrollPhysics(),
+          child: _BulletList(bullets: widget.byte.summaryBullets, color: color),
         );
       case 1:
-        return _Eli5Content(
-          key: const ValueKey('eli5'),
-          content: byte.eli5Content,
-          color: color,
+        return SingleChildScrollView(
+          physics: const BouncingScrollPhysics(),
+          child: _Eli5Content(content: widget.byte.eli5Content, color: color),
         );
       case 2:
-        return _EmptyTabBox(
-          key: const ValueKey('takeaway'),
-          icon: '⚡',
-          label: 'Actionable Takeaway',
-          color: color,
-        );
+        return _EmptyTabBox(icon: '⚡', label: 'Actionable Takeaway', color: color);
       case 3:
-        return _EmptyTabBox(
-          key: const ValueKey('social'),
-          icon: '💬',
-          label: 'Social Views',
-          color: color,
-        );
+        return _EmptyTabBox(icon: '💬', label: 'Social Views', color: color);
       default:
         return const SizedBox.shrink();
     }
+  }
+}
+
+// ─── Animated divider ─────────────────────────────────────────────────────────
+
+/// The bright stop of the gradient travels from the left edge (progress=0)
+/// to the right edge (progress=tabCount-1), tracking the PageView scroll
+/// continuously — not just on snapped page changes.
+class _AnimatedDivider extends StatelessWidget {
+  final Color color;
+  final double progress;   // 0.0 … tabCount-1
+  final int tabCount;
+
+  const _AnimatedDivider({
+    required this.color,
+    required this.progress,
+    required this.tabCount,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    // Normalise to 0.0–1.0
+    final t = (progress / (tabCount - 1)).clamp(0.0, 1.0);
+
+    // Bright spot width as fraction of total line
+    const spotWidth = 0.30;
+
+    // Centre of the bright spot travels from 0 to 1
+    final spotCenter = t;
+    final spotLeft  = (spotCenter - spotWidth / 2).clamp(0.0, 1.0);
+    final spotRight = (spotCenter + spotWidth / 2).clamp(0.0, 1.0);
+
+    return Container(
+      height: 1,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          stops: [
+            0.0,
+            spotLeft,
+            spotCenter,
+            spotRight,
+            1.0,
+          ],
+          colors: [
+            Colors.transparent,
+            color.withOpacity(0.08),
+            color.withOpacity(0.75),
+            color.withOpacity(0.08),
+            Colors.transparent,
+          ],
+        ),
+      ),
+    );
   }
 }
 
@@ -329,12 +374,13 @@ class _BulletList extends StatelessWidget {
   final List<String> bullets;
   final Color color;
 
-  const _BulletList({super.key, required this.bullets, required this.color});
+  const _BulletList({required this.bullets, required this.color});
 
   @override
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
       children: bullets.asMap().entries.map((entry) {
         return Padding(
           padding: const EdgeInsets.only(bottom: 16),
@@ -379,7 +425,7 @@ class _Eli5Content extends StatelessWidget {
   final String content;
   final Color color;
 
-  const _Eli5Content({super.key, required this.content, required this.color});
+  const _Eli5Content({required this.content, required this.color});
 
   @override
   Widget build(BuildContext context) {
@@ -399,14 +445,12 @@ class _Eli5Content extends StatelessWidget {
   }
 }
 
-/// Placeholder box for tabs not yet wired to content (Takeaway, Social)
 class _EmptyTabBox extends StatelessWidget {
   final String icon;
   final String label;
   final Color color;
 
   const _EmptyTabBox({
-    super.key,
     required this.icon,
     required this.label,
     required this.color,
@@ -423,7 +467,6 @@ class _EmptyTabBox extends StatelessWidget {
   }
 }
 
-/// Shared styled container used by ELI5, Takeaway, Social tabs
 class _StyledBox extends StatelessWidget {
   final Color color;
   final String icon;
@@ -472,81 +515,6 @@ class _StyledBox extends StatelessWidget {
   }
 }
 
-// ─── 4-tab content switcher bar ───────────────────────────────────────────────
-
-class _ContentTabBar extends StatelessWidget {
-  final int activeTab;
-  final Color color;
-  final ValueChanged<int> onTabSelected;
-
-  const _ContentTabBar({
-    required this.activeTab,
-    required this.color,
-    required this.onTabSelected,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.07),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: color.withOpacity(0.2), width: 1),
-      ),
-      padding: const EdgeInsets.all(4),
-      child: Row(
-        children: List.generate(_kTabs.length, (i) {
-          final isActive = i == activeTab;
-          return Expanded(
-            child: GestureDetector(
-              onTap: () => onTabSelected(i),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                curve: Curves.easeOutCubic,
-                padding: const EdgeInsets.symmetric(vertical: 9),
-                decoration: BoxDecoration(
-                  color: isActive ? color : Colors.transparent,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      _kTabs[i]['icon']!,
-                      style: const TextStyle(fontSize: 14),
-                    ),
-                    const SizedBox(height: 3),
-                    Text(
-                      _shortLabel(i),
-                      style: TextStyle(
-                        fontSize: 9,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 0.2,
-                        color: isActive
-                            ? AppColors.deepNavy
-                            : AppColors.textSecondary,
-                      ),
-                      textAlign: TextAlign.center,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          );
-        }),
-      ),
-    );
-  }
-
-  // Shortened label so tabs fit on narrow screens
-  String _shortLabel(int i) {
-    const short = ['Overview', "ELI5", 'Takeaway', 'Social'];
-    return short[i];
-  }
-}
-
 // ─── Category dropdown ────────────────────────────────────────────────────────
 
 class _CategoryDropdown extends StatelessWidget {
@@ -581,10 +549,8 @@ class _CategoryDropdown extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Header
             Padding(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               child: Text(
                 'SWITCH FEED',
                 style: TextStyle(
@@ -600,7 +566,6 @@ class _CategoryDropdown extends StatelessWidget {
             ..._kCategories.map((cat) => _DropdownItem(
                   label: cat,
                   isMyDigest: cat == 'MyDigest',
-                  // TODO: wire to DB/state in Phase 3
                   onTap: onClose,
                 )),
             const SizedBox(height: 4),
@@ -631,28 +596,21 @@ class _DropdownItem extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         child: Row(
           children: [
-            Text(
-              _categoryIcon(label),
-              style: const TextStyle(fontSize: 16),
-            ),
+            Text(_categoryIcon(label), style: const TextStyle(fontSize: 16)),
             const SizedBox(width: 12),
             Expanded(
               child: Text(
                 label,
                 style: TextStyle(
                   fontSize: 14,
-                  fontWeight:
-                      isMyDigest ? FontWeight.w700 : FontWeight.w500,
-                  color: isMyDigest
-                      ? AppColors.neonGreen
-                      : AppColors.textPrimary,
+                  fontWeight: isMyDigest ? FontWeight.w700 : FontWeight.w500,
+                  color: isMyDigest ? AppColors.neonGreen : AppColors.textPrimary,
                 ),
               ),
             ),
             if (isMyDigest)
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
                 decoration: BoxDecoration(
                   color: AppColors.neonGreen.withOpacity(0.15),
                   borderRadius: BorderRadius.circular(6),

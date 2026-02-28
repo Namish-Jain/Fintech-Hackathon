@@ -4,6 +4,7 @@ import 'package:tiktoklikescroller/tiktoklikescroller.dart';
 import '../data/mock_data.dart';
 import '../theme/app_theme.dart';
 import '../widgets/byte_card.dart';
+import 'profile_screen.dart';
 
 class FeedScreen extends StatefulWidget {
   const FeedScreen({super.key});
@@ -13,8 +14,10 @@ class FeedScreen extends StatefulWidget {
 }
 
 class _FeedScreenState extends State<FeedScreen> {
+  final PageController _navController = PageController();
+  int _navIndex = 0;
+
   late final Controller _scrollController;
-  int _currentIndex = 0;
 
   @override
   void initState() {
@@ -23,9 +26,17 @@ class _FeedScreenState extends State<FeedScreen> {
       ..addListener((ScrollEvent event) {
         if (event.pageNo != null) {
           HapticFeedback.lightImpact();
-          setState(() => _currentIndex = event.pageNo!);
         }
       });
+  }
+
+  void _navigateTo(int index) {
+    setState(() => _navIndex = index);
+    _navController.animateToPage(
+      index,
+      duration: const Duration(milliseconds: 320),
+      curve: Curves.easeInOutCubic,
+    );
   }
 
   @override
@@ -34,32 +45,32 @@ class _FeedScreenState extends State<FeedScreen> {
       backgroundColor: AppColors.deepNavy,
       body: Stack(
         children: [
-          // ── TikTok-style vertical snap feed ──────────────────────────────
-          TikTokStyleFullPageScroller(
-            contentSize: mockBytes.length,
-            controller: _scrollController,
-            swipePositionThreshold: 0.2,
-            swipeVelocityThreshold: 2000,
-            animationDuration: const Duration(milliseconds: 350),
-            builder: (BuildContext context, int index) {
-              return ByteCard(byte: mockBytes[index]);
-            },
+          PageView(
+            controller: _navController,
+            physics: const NeverScrollableScrollPhysics(),
+            children: [
+              // Page 0: Feed
+              TikTokStyleFullPageScroller(
+                contentSize: mockBytes.length,
+                controller: _scrollController,
+                swipePositionThreshold: 0.2,
+                swipeVelocityThreshold: 2000,
+                animationDuration: const Duration(milliseconds: 350),
+                builder: (BuildContext context, int index) {
+                  return ByteCard(byte: mockBytes[index]);
+                },
+              ),
+              // Page 1: Profile
+              const ProfileScreen(),
+            ],
           ),
 
-          // ── AppBar sits on top — pushed higher via SafeArea + custom top ─
+          // Top bar always on top
           Positioned(
             top: 0, left: 0, right: 0,
-            child: _FinBytesAppBar(),
-          ),
-
-          // ── Progress dots (bottom center) ────────────────────────────────
-          Positioned(
-            bottom: 40,
-            left: 0,
-            right: 0,
-            child: _ProgressDots(
-              total: mockBytes.length,
-              current: _currentIndex,
+            child: _FinBytesAppBar(
+              navIndex: _navIndex,
+              onNavChanged: _navigateTo,
             ),
           ),
         ],
@@ -68,41 +79,34 @@ class _FeedScreenState extends State<FeedScreen> {
   }
 }
 
+// ─── App bar ──────────────────────────────────────────────────────────────────
+
 class _FinBytesAppBar extends StatelessWidget {
-  const _FinBytesAppBar();
+  final int navIndex;
+  final ValueChanged<int> onNavChanged;
+
+  const _FinBytesAppBar({
+    required this.navIndex,
+    required this.onNavChanged,
+  });
 
   @override
   Widget build(BuildContext context) {
-    // Render above all card content; use SafeArea so it clears the notch,
-    // then add a little extra bottom padding so it sits well above the card top.
     return SafeArea(
       bottom: false,
       child: Padding(
-        // Extra top padding lifts the bar up from the card title
-        padding: const EdgeInsets.only(top: 8, left: 16, right: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
         child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            // Logo mark
-            Container(
-              width: 26,
-              height: 26,
-              decoration: BoxDecoration(
-                color: AppColors.neonGreen,
-                borderRadius: BorderRadius.circular(7),
-              ),
-              child: Center(
-                child: Text(
-                  'F',
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w900,
-                    color: AppColors.deepNavy,
-                  ),
-                ),
-              ),
+            // Logo: lightning bolt icon in neon green, no box
+            const Icon(
+              Icons.bolt_rounded,
+              color: AppColors.neonGreen,
+              size: 26,
             ),
-            const SizedBox(width: 8),
-            Text(
+            const SizedBox(width: 4),
+            const Text(
               'FinBytes',
               style: TextStyle(
                 color: AppColors.textPrimary,
@@ -112,11 +116,7 @@ class _FinBytesAppBar extends StatelessWidget {
               ),
             ),
             const Spacer(),
-            IconButton(
-              icon: const Icon(Icons.person_outline_rounded,
-                  color: AppColors.textSecondary),
-              onPressed: () {},
-            ),
+            _NavToggle(navIndex: navIndex, onChanged: onNavChanged),
           ],
         ),
       ),
@@ -124,31 +124,115 @@ class _FinBytesAppBar extends StatelessWidget {
   }
 }
 
-class _ProgressDots extends StatelessWidget {
-  final int total;
-  final int current;
+// ─── Sliding pill nav toggle ──────────────────────────────────────────────────
 
-  const _ProgressDots({required this.total, required this.current});
+class _NavToggle extends StatelessWidget {
+  final int navIndex;
+  final ValueChanged<int> onChanged;
+
+  const _NavToggle({required this.navIndex, required this.onChanged});
+
+  // Each segment width — must match what we render below
+  static const double _segmentW = 76.0;
+  static const double _pillH = 32.0;
+  static const double _pad = 3.0;
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: List.generate(total, (index) {
-        final isActive = index == current;
-        return AnimatedContainer(
-          duration: const Duration(milliseconds: 250),
-          margin: const EdgeInsets.symmetric(horizontal: 3),
-          width: isActive ? 20 : 6,
-          height: 6,
-          decoration: BoxDecoration(
-            color: isActive
-                ? AppColors.neonGreen
-                : AppColors.textSecondary.withOpacity(0.4),
-            borderRadius: BorderRadius.circular(3),
+    return Container(
+      height: _pillH + _pad * 2,
+      width: _segmentW * 2 + _pad * 2,
+      padding: const EdgeInsets.all(_pad),
+      decoration: BoxDecoration(
+        color: AppColors.cardSurface,
+        borderRadius: BorderRadius.circular((_pillH + _pad * 2) / 2),
+        border: Border.all(color: AppColors.cardBorder, width: 1),
+      ),
+      child: Stack(
+        children: [
+          // Animated green pill
+          AnimatedPositioned(
+            duration: const Duration(milliseconds: 260),
+            curve: Curves.easeInOutCubic,
+            left: navIndex == 0 ? 0 : _segmentW,
+            top: 0,
+            bottom: 0,
+            width: _segmentW,
+            child: Container(
+              decoration: BoxDecoration(
+                color: AppColors.neonGreen,
+                borderRadius: BorderRadius.circular(_pillH / 2),
+              ),
+            ),
           ),
-        );
-      }),
+          // Labels on top of pill
+          Row(
+            children: [
+              _Segment(
+                label: 'Feed',
+                icon: Icons.newspaper_rounded,
+                isActive: navIndex == 0,
+                width: _segmentW,
+                onTap: () => onChanged(0),
+              ),
+              _Segment(
+                label: 'Profile',
+                icon: Icons.person_rounded,
+                isActive: navIndex == 1,
+                width: _segmentW,
+                onTap: () => onChanged(1),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _Segment extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final bool isActive;
+  final double width;
+  final VoidCallback onTap;
+
+  const _Segment({
+    required this.label,
+    required this.icon,
+    required this.isActive,
+    required this.width,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final color = isActive ? AppColors.deepNavy : AppColors.textSecondary;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: SizedBox(
+        width: width,
+        // Match the pill height so tap target fills the pill
+        height: double.infinity,
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Icon(icon, size: 13, color: color),
+            const SizedBox(width: 4),
+            AnimatedDefaultTextStyle(
+              duration: const Duration(milliseconds: 200),
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: color,
+              ),
+              child: Text(label),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
