@@ -10,8 +10,8 @@ import 'theme/app_theme.dart';
 // ── Supabase credentials ──────────────────────────────────────────────────────
 // Replace these values with your own from the Supabase Dashboard →
 // Project Settings → API
-const _kSupabaseUrl = '';
-const _kSupabaseAnonKey = '';
+const _kSupabaseUrl = 'https://xmnniehssmlhmxxicpsv.supabase.co';
+const _kSupabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inhtbm5pZWhzc21saG14eGljcHN2Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3MjI5MTI0NywiZXhwIjoyMDg3ODY3MjQ3fQ.BAlrknbAuhMEFWlhnzRVDMjjhRzGrHv0OnUnlgpz6o0';
 // ─────────────────────────────────────────────────────────────────────────────
 
 Future<void> main() async {

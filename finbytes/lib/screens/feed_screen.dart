@@ -235,134 +235,45 @@ class _FinBytesAppBar extends StatelessWidget {
     return SafeArea(
       bottom: false,
       child: Padding(
-        padding:
-            const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             const Icon(Icons.bolt_rounded,
-                color: AppColors.neonGreen, size: 26),
+                color: AppColors.neonGreen, size: 24),
             const SizedBox(width: 4),
             const Text(
               'FinBytes',
               style: TextStyle(
                 color: AppColors.textPrimary,
-                fontSize: 19,
+                fontSize: 18,
                 fontWeight: FontWeight.w700,
                 letterSpacing: -0.3,
               ),
             ),
             const Spacer(),
-            _NavToggle(navIndex: navIndex, onChanged: onNavChanged),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ─── Sliding pill nav toggle ──────────────────────────────────────────────────
-
-class _NavToggle extends StatelessWidget {
-  final int navIndex;
-  final ValueChanged<int> onChanged;
-
-  const _NavToggle({required this.navIndex, required this.onChanged});
-
-  static const double _segmentW = 70.0;
-  static const double _pillH = 30.0;
-  static const double _pad = 3.0;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: _pillH + _pad * 2,
-      width: _segmentW * 2 + _pad * 2,
-      padding: const EdgeInsets.all(_pad),
-      decoration: BoxDecoration(
-        color: AppColors.cardSurface,
-        borderRadius: BorderRadius.circular((_pillH + _pad * 2) / 2),
-        border: Border.all(color: AppColors.cardBorder, width: 1),
-      ),
-      child: Stack(
-        children: [
-          AnimatedPositioned(
-            duration: const Duration(milliseconds: 260),
-            curve: Curves.easeInOutCubic,
-            left: navIndex == 0 ? 0 : _segmentW,
-            top: 0,
-            bottom: 0,
-            width: _segmentW,
-            child: Container(
-              decoration: BoxDecoration(
-                color: AppColors.neonGreen,
-                borderRadius: BorderRadius.circular(_pillH / 2),
+            // Feed icon
+            GestureDetector(
+              onTap: () => onNavChanged(0),
+              child: Icon(
+                Icons.newspaper_rounded,
+                size: 26,
+                color: navIndex == 0
+                    ? AppColors.neonGreen
+                    : AppColors.textSecondary,
               ),
             ),
-          ),
-          Row(
-            children: [
-              _Segment(
-                label: 'Feed',
-                icon: Icons.newspaper_rounded,
-                isActive: navIndex == 0,
-                width: _segmentW,
-                onTap: () => onChanged(0),
+            const SizedBox(width: 20),
+            // Profile icon
+            GestureDetector(
+              onTap: () => onNavChanged(1),
+              child: Icon(
+                Icons.person_rounded,
+                size: 26,
+                color: navIndex == 1
+                    ? AppColors.neonGreen
+                    : AppColors.textSecondary,
               ),
-              _Segment(
-                label: 'Profile',
-                icon: Icons.person_rounded,
-                isActive: navIndex == 1,
-                width: _segmentW,
-                onTap: () => onChanged(1),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _Segment extends StatelessWidget {
-  final String label;
-  final IconData icon;
-  final bool isActive;
-  final double width;
-  final VoidCallback onTap;
-
-  const _Segment({
-    required this.label,
-    required this.icon,
-    required this.isActive,
-    required this.width,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final color =
-        isActive ? AppColors.deepNavy : AppColors.textSecondary;
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: onTap,
-      child: SizedBox(
-        width: width,
-        height: double.infinity,
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            Icon(icon, size: 13, color: color),
-            const SizedBox(width: 4),
-            AnimatedDefaultTextStyle(
-              duration: const Duration(milliseconds: 200),
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-                color: color,
-              ),
-              child: Text(label),
             ),
           ],
         ),
