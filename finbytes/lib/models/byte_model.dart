@@ -6,6 +6,7 @@ class Byte {
   final String category;     // finbytes.category
   final String headline;     // news_articles.headline
   final String sourceName;   // news_articles.source_name
+  final String articleUrl;   // news_articles.url
   final String summaryOverview;        // finbytes.summary_overview  (tab 0)
   final String summaryEli5;            // finbytes.summary_eli5      (tab 1)
   final String actionableTakeaway;     // finbytes.actionable_takeaway (tab 2)
@@ -18,6 +19,7 @@ class Byte {
     required this.category,
     required this.headline,
     required this.sourceName,
+    required this.articleUrl,
     required this.summaryOverview,
     required this.summaryEli5,
     required this.actionableTakeaway,
@@ -35,6 +37,7 @@ class Byte {
       category:                 map['category'] as String? ?? '',
       headline:                 article['headline'] as String? ?? '',
       sourceName:               article['source_name'] as String? ?? '',
+      articleUrl:               article['url'] as String? ?? '',
       summaryOverview:          _clean(map['summary_overview']),
       summaryEli5:              _clean(map['summary_eli5']),
       actionableTakeaway:       _clean(map['actionable_takeaway']),

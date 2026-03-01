@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../models/byte_model.dart';
 import '../providers/feed_providers.dart';
 import '../theme/app_theme.dart';
@@ -150,7 +151,8 @@ class _ByteCardState extends ConsumerState<ByteCard> {
                               const SizedBox(width: 8),
                               Flexible(
                                 child: _SourceBadge(
-                                    source: widget.byte.sourceName),
+                                    source: widget.byte.sourceName,
+                                    url: widget.byte.articleUrl),
                               ),
                             ],
                           ),
@@ -471,35 +473,56 @@ class _CategoryBadge extends StatelessWidget {
 
 class _SourceBadge extends StatelessWidget {
   final String source;
+  final String url;
 
-  const _SourceBadge({required this.source});
+  const _SourceBadge({required this.source, required this.url});
+
+  Future<void> _open() async {
+    if (url.isEmpty) return;
+    final uri = Uri.tryParse(url);
+    if (uri == null) return;
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          width: 6,
-          height: 6,
-          decoration: const BoxDecoration(
-            shape: BoxShape.circle,
+    return GestureDetector(
+      onTap: _open,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 6,
+            height: 6,
+            decoration: const BoxDecoration(
+              shape: BoxShape.circle,
+              color: AppColors.neonGreen,
+            ),
+          ),
+          const SizedBox(width: 6),
+          Flexible(
+            child: Text(
+              source,
+              overflow: TextOverflow.ellipsis,
+              maxLines: 1,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.neonGreen,
+                    decoration: TextDecoration.underline,
+                    decorationColor: AppColors.neonGreen,
+                  ),
+            ),
+          ),
+          const SizedBox(width: 4),
+          const Icon(
+            Icons.open_in_new_rounded,
+            size: 11,
             color: AppColors.neonGreen,
           ),
-        ),
-        const SizedBox(width: 6),
-        Flexible(
-          child: Text(
-            source,
-            overflow: TextOverflow.ellipsis,
-            maxLines: 1,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.textSecondary,
-                ),
-          ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }

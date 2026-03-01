@@ -11,7 +11,7 @@ class FeedService {
   static Future<List<Byte>> fetchByCategory(String category) async {
     final rows = await _db
         .from('finbytes')
-        .select('*, news_articles!inner(headline, source_name)')
+        .select('*, news_articles!inner(headline, source_name, url)')
         .eq('category', category)
         .order('impact_score', ascending: false);
 
@@ -27,7 +27,7 @@ class FeedService {
 
     final rows = await _db
         .from('finbytes')
-        .select('*, news_articles!inner(headline, source_name)')
+        .select('*, news_articles!inner(headline, source_name, url)')
         .inFilter('category', categories)
         .order('impact_score', ascending: false);
 
