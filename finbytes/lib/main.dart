@@ -1,19 +1,33 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'screens/auth_screen.dart';
+import 'services/profile_service.dart';
 import 'screens/feed_screen.dart';
 import 'theme/app_theme.dart';
 
-void main() {
+// ── Supabase credentials ──────────────────────────────────────────────────────
+// Replace these values with your own from the Supabase Dashboard →
+// Project Settings → API
+const _kSupabaseUrl = '';
+const _kSupabaseAnonKey = '';
+// ─────────────────────────────────────────────────────────────────────────────
+
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Force portrait mode — card feed is portrait-only
+  // Init Supabase before anything else
+  await Supabase.initialize(
+    url: _kSupabaseUrl,
+    anonKey: _kSupabaseAnonKey,
+  );
+
   SystemChrome.setPreferredOrientations([
     DeviceOrientation.portraitUp,
     DeviceOrientation.portraitDown,
   ]);
 
-  // Transparent status/nav bar for immersive feed experience
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
       statusBarColor: Colors.transparent,
@@ -22,10 +36,7 @@ void main() {
     ),
   );
 
-  runApp(
-    // Wrap the entire app in ProviderScope for Riverpod
-    const ProviderScope(child: FinBytesApp()),
-  );
+  runApp(const ProviderScope(child: FinBytesApp()));
 }
 
 class FinBytesApp extends StatelessWidget {
@@ -37,7 +48,33 @@ class FinBytesApp extends StatelessWidget {
       title: 'FinBytes',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.dark,
-      home: const FeedScreen(),
+      home: const _RootRouter(),
     );
+  }
+}
+
+/// Decides the first screen. Also refreshes the streak on each app open.
+class _RootRouter extends StatefulWidget {
+  const _RootRouter();
+
+  @override
+  State<_RootRouter> createState() => _RootRouterState();
+}
+
+class _RootRouterState extends State<_RootRouter> {
+  @override
+  void initState() {
+    super.initState();
+    // Fire-and-forget streak update — only runs if the user is logged in
+    ProfileService.refreshStreak();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final session = Supabase.instance.client.auth.currentSession;
+    if (session != null) {
+      return const FeedScreen();
+    }
+    return const AuthScreen();
   }
 }

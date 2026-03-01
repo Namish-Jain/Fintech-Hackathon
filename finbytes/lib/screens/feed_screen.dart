@@ -1,32 +1,31 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tiktoklikescroller/tiktoklikescroller.dart';
-import '../data/mock_data.dart';
+import '../models/byte_model.dart';
+import '../providers/feed_providers.dart';
 import '../theme/app_theme.dart';
 import '../widgets/byte_card.dart';
 import 'profile_screen.dart';
 
-class FeedScreen extends StatefulWidget {
+class FeedScreen extends ConsumerStatefulWidget {
   const FeedScreen({super.key});
 
   @override
-  State<FeedScreen> createState() => _FeedScreenState();
+  ConsumerState<FeedScreen> createState() => _FeedScreenState();
 }
 
-class _FeedScreenState extends State<FeedScreen> {
+class _FeedScreenState extends ConsumerState<FeedScreen> {
   final PageController _navController = PageController();
   int _navIndex = 0;
-
-  late final Controller _scrollController;
+  late Controller _scrollController;
 
   @override
   void initState() {
     super.initState();
     _scrollController = Controller()
       ..addListener((ScrollEvent event) {
-        if (event.pageNo != null) {
-          HapticFeedback.lightImpact();
-        }
+        if (event.pageNo != null) HapticFeedback.lightImpact();
       });
   }
 
@@ -41,6 +40,9 @@ class _FeedScreenState extends State<FeedScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final feedAsync = ref.watch(feedProvider);
+    final activeCategory = ref.watch(activeCategoryProvider);
+
     return Scaffold(
       backgroundColor: AppColors.deepNavy,
       body: Stack(
@@ -49,23 +51,37 @@ class _FeedScreenState extends State<FeedScreen> {
             controller: _navController,
             physics: const NeverScrollableScrollPhysics(),
             children: [
-              // Page 0: Feed
-              TikTokStyleFullPageScroller(
-                contentSize: mockBytes.length,
-                controller: _scrollController,
-                swipePositionThreshold: 0.2,
-                swipeVelocityThreshold: 2000,
-                animationDuration: const Duration(milliseconds: 350),
-                builder: (BuildContext context, int index) {
-                  return ByteCard(byte: mockBytes[index]);
+              // ── Feed page ─────────────────────────────────────────────────
+              feedAsync.when(
+                loading: () => const _LoadingFeed(),
+                error: (e, _) => _ErrorFeed(
+                  message: e.toString(),
+                  onRetry: () => ref.invalidate(feedProvider),
+                ),
+                data: (bytes) {
+                  if (bytes.isEmpty) {
+                    return _EmptyFeed(category: activeCategory);
+                  }
+                  // Re-create the scroll controller when data changes so
+                  // the scroller starts from card 0 on category switch.
+                  return TikTokStyleFullPageScroller(
+                    contentSize: bytes.length,
+                    controller: _scrollController,
+                    swipePositionThreshold: 0.2,
+                    swipeVelocityThreshold: 2000,
+                    animationDuration: const Duration(milliseconds: 350),
+                    builder: (context, index) =>
+                        ByteCard(byte: bytes[index]),
+                  );
                 },
               ),
-              // Page 1: Profile
+
+              // ── Profile page ──────────────────────────────────────────────
               const ProfileScreen(),
             ],
           ),
 
-          // Top bar always on top
+          // App bar always on top
           Positioned(
             top: 0, left: 0, right: 0,
             child: _FinBytesAppBar(
@@ -74,6 +90,130 @@ class _FeedScreenState extends State<FeedScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+// ─── Loading state ────────────────────────────────────────────────────────────
+
+class _LoadingFeed extends StatelessWidget {
+  const _LoadingFeed();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          CircularProgressIndicator(
+            color: AppColors.neonGreen,
+            strokeWidth: 2.5,
+          ),
+          SizedBox(height: 16),
+          Text(
+            'Loading your feed...',
+            style: TextStyle(
+              color: AppColors.textSecondary,
+              fontSize: 14,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Error state ──────────────────────────────────────────────────────────────
+
+class _ErrorFeed extends StatelessWidget {
+  final String message;
+  final VoidCallback onRetry;
+
+  const _ErrorFeed({required this.message, required this.onRetry});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.wifi_off_rounded,
+                color: AppColors.textSecondary, size: 48),
+            const SizedBox(height: 16),
+            const Text('Could not load feed',
+                style: TextStyle(
+                  color: AppColors.textPrimary,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                )),
+            const SizedBox(height: 8),
+            Text(message,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                    color: AppColors.textSecondary, fontSize: 13)),
+            const SizedBox(height: 24),
+            GestureDetector(
+              onTap: onRetry,
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 24, vertical: 12),
+                decoration: BoxDecoration(
+                  color: AppColors.neonGreen,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Text('Try Again',
+                    style: TextStyle(
+                      color: AppColors.deepNavy,
+                      fontWeight: FontWeight.w700,
+                    )),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Empty state ──────────────────────────────────────────────────────────────
+
+class _EmptyFeed extends StatelessWidget {
+  final String category;
+
+  const _EmptyFeed({required this.category});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('📭', style: TextStyle(fontSize: 48)),
+            const SizedBox(height: 16),
+            Text(
+              category == 'MyDigest'
+                  ? 'No cards in your digest yet'
+                  : 'No cards in $category yet',
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: AppColors.textPrimary,
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Check back soon — new articles are ingested regularly.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -95,16 +235,13 @@ class _FinBytesAppBar extends StatelessWidget {
     return SafeArea(
       bottom: false,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        padding:
+            const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            // Logo: lightning bolt icon in neon green, no box
-            const Icon(
-              Icons.bolt_rounded,
-              color: AppColors.neonGreen,
-              size: 26,
-            ),
+            const Icon(Icons.bolt_rounded,
+                color: AppColors.neonGreen, size: 26),
             const SizedBox(width: 4),
             const Text(
               'FinBytes',
@@ -132,9 +269,8 @@ class _NavToggle extends StatelessWidget {
 
   const _NavToggle({required this.navIndex, required this.onChanged});
 
-  // Each segment width — must match what we render below
-  static const double _segmentW = 76.0;
-  static const double _pillH = 32.0;
+  static const double _segmentW = 70.0;
+  static const double _pillH = 30.0;
   static const double _pad = 3.0;
 
   @override
@@ -150,7 +286,6 @@ class _NavToggle extends StatelessWidget {
       ),
       child: Stack(
         children: [
-          // Animated green pill
           AnimatedPositioned(
             duration: const Duration(milliseconds: 260),
             curve: Curves.easeInOutCubic,
@@ -165,7 +300,6 @@ class _NavToggle extends StatelessWidget {
               ),
             ),
           ),
-          // Labels on top of pill
           Row(
             children: [
               _Segment(
@@ -207,13 +341,13 @@ class _Segment extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = isActive ? AppColors.deepNavy : AppColors.textSecondary;
+    final color =
+        isActive ? AppColors.deepNavy : AppColors.textSecondary;
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: onTap,
       child: SizedBox(
         width: width,
-        // Match the pill height so tap target fills the pill
         height: double.infinity,
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,

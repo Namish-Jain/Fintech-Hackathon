@@ -2,9 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/byte_model.dart';
+import '../providers/feed_providers.dart';
 import '../theme/app_theme.dart';
 
-// ─── Providers ────────────────────────────────────────────────────────────────
+// ─── Per-card providers ───────────────────────────────────────────────────────
 
 final contentTabProvider = StateProvider.family<int, String>((ref, id) => 0);
 final categoryDropdownProvider = StateProvider<bool>((ref) => false);
@@ -22,6 +23,7 @@ const List<String> _kCategories = [
   'Crypto Currency',
 ];
 
+// Tab definitions — icons only; labels shown in the animated divider
 const List<Map<String, String>> _kTabs = [
   {'icon': '📰', 'label': 'Actual Overview'},
   {'icon': '🧒', 'label': "Explain Like I'm 5"},
@@ -42,9 +44,6 @@ class ByteCard extends ConsumerStatefulWidget {
 
 class _ByteCardState extends ConsumerState<ByteCard> {
   late final PageController _tabPageController;
-
-  /// Fractional page position: 0.0 = tab 0 fully visible, 1.0 = tab 1, etc.
-  /// Drives the animated divider gradient.
   double _swipeProgress = 0.0;
 
   @override
@@ -85,7 +84,7 @@ class _ByteCardState extends ConsumerState<ByteCard> {
       height: size.height,
       child: Stack(
         children: [
-          // ── Main card ────────────────────────────────────────────────────
+          // ── Card ─────────────────────────────────────────────────────────
           Positioned(
             top: topPadding,
             left: 16,
@@ -127,7 +126,6 @@ class _ByteCardState extends ConsumerState<ByteCard> {
                       ),
                     ),
 
-                    // Main content
                     Padding(
                       padding: const EdgeInsets.fromLTRB(24, 24, 24, 20),
                       child: Column(
@@ -135,35 +133,47 @@ class _ByteCardState extends ConsumerState<ByteCard> {
                         children: [
                           const SizedBox(height: 8),
 
-                          // Badges row
+                          // Category badge + source — both Flexible to prevent overflow
                           Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            mainAxisAlignment:
+                                MainAxisAlignment.spaceBetween,
                             children: [
-                              _CategoryBadge(
-                                label: widget.byte.category,
-                                color: categoryColor,
-                                onTap: () => ref
-                                    .read(categoryDropdownProvider.notifier)
-                                    .state = !dropdownOpen,
+                              Flexible(
+                                child: _CategoryBadge(
+                                  label: widget.byte.category,
+                                  color: categoryColor,
+                                  onTap: () => ref
+                                      .read(categoryDropdownProvider.notifier)
+                                      .state = !dropdownOpen,
+                                ),
                               ),
-                              _SourceBadge(source: widget.byte.source),
+                              const SizedBox(width: 8),
+                              Flexible(
+                                child: _SourceBadge(
+                                    source: widget.byte.sourceName),
+                              ),
                             ],
                           ),
 
                           const SizedBox(height: 18),
 
-                          // Title
+                          // Impact score chip
+                          _ImpactChip(score: widget.byte.impactScore),
+
+                          const SizedBox(height: 12),
+
+                          // Headline
                           Text(
-                            widget.byte.title,
-                            style: Theme.of(context).textTheme.headlineLarge,
+                            widget.byte.headline,
+                            style:
+                                Theme.of(context).textTheme.headlineLarge,
                             maxLines: 3,
                             overflow: TextOverflow.ellipsis,
                           ),
 
                           const SizedBox(height: 18),
 
-                          // Animated divider — bright spot travels left→right
-                          // as _swipeProgress goes 0→(tabCount-1)
+                          // Animated divider
                           _AnimatedDivider(
                             color: categoryColor,
                             progress: _swipeProgress,
@@ -172,20 +182,18 @@ class _ByteCardState extends ConsumerState<ByteCard> {
 
                           const SizedBox(height: 14),
 
-                          // Swipeable content PageView
+                          // Swipeable content
                           Expanded(
                             child: PageView.builder(
                               controller: _tabPageController,
                               itemCount: _kTabs.length,
                               onPageChanged: _onTabSwiped,
                               scrollDirection: Axis.horizontal,
-                              itemBuilder: (context, index) {
-                                return _buildTabContent(
-                                    context, index, categoryColor);
-                              },
+                              itemBuilder: (context, index) =>
+                                  _buildTabContent(
+                                      context, index, categoryColor),
                             ),
                           ),
-                          // No bottom bar — removed
                         ],
                       ),
                     ),
@@ -202,7 +210,8 @@ class _ByteCardState extends ConsumerState<ByteCard> {
                 onTap: () => ref
                     .read(categoryDropdownProvider.notifier)
                     .state = false,
-                child: Container(color: Colors.black.withOpacity(0.6)),
+                child:
+                    Container(color: Colors.black.withOpacity(0.6)),
               ),
             ),
             Positioned(
@@ -210,9 +219,13 @@ class _ByteCardState extends ConsumerState<ByteCard> {
               left: 16,
               child: _CategoryDropdown(
                 categoryColor: categoryColor,
-                onClose: () => ref
-                    .read(categoryDropdownProvider.notifier)
-                    .state = false,
+                onSelect: (cat) {
+                  // Update active feed category via provider
+                  ref.read(activeCategoryProvider.notifier).state = cat;
+                  ref
+                      .read(categoryDropdownProvider.notifier)
+                      .state = false;
+                },
               ),
             ),
           ],
@@ -223,34 +236,91 @@ class _ByteCardState extends ConsumerState<ByteCard> {
 
   Widget _buildTabContent(BuildContext context, int tab, Color color) {
     switch (tab) {
-      case 0:
-        return SingleChildScrollView(
-          physics: const BouncingScrollPhysics(),
-          child: _BulletList(bullets: widget.byte.summaryBullets, color: color),
+      case 0: // Actual Overview
+        return _ScrollableText(
+          key: const ValueKey('overview'),
+          text: widget.byte.summaryOverview,
+          color: color,
+          icon: '📰',
+          label: 'Actual Overview',
         );
-      case 1:
-        return SingleChildScrollView(
-          physics: const BouncingScrollPhysics(),
-          child: _Eli5Content(content: widget.byte.eli5Content, color: color),
+      case 1: // ELI5
+        return _ScrollableText(
+          key: const ValueKey('eli5'),
+          text: widget.byte.summaryEli5,
+          color: color,
+          icon: '🧒',
+          label: 'Explained Simply',
+          italic: true,
         );
-      case 2:
-        return _EmptyTabBox(icon: '⚡', label: 'Actionable Takeaway', color: color);
-      case 3:
-        return _EmptyTabBox(icon: '💬', label: 'Social Views', color: color);
+      case 2: // Actionable Takeaway
+        return _ScrollableText(
+          key: const ValueKey('takeaway'),
+          text: widget.byte.actionableTakeaway,
+          color: color,
+          icon: '⚡',
+          label: 'Actionable Takeaway',
+        );
+      case 3: // Social Views
+        return _ScrollableText(
+          key: const ValueKey('social'),
+          text: widget.byte.simulatedPublicReaction,
+          color: color,
+          icon: '💬',
+          label: 'Social Views',
+        );
       default:
         return const SizedBox.shrink();
     }
   }
 }
 
+// ─── Impact score chip ────────────────────────────────────────────────────────
+
+class _ImpactChip extends StatelessWidget {
+  final int score;
+  const _ImpactChip({required this.score});
+
+  Color _chipColor() {
+    if (score >= 75) return AppColors.negative;
+    if (score >= 50) return AppColors.warning;
+    return AppColors.textSecondary;
+  }
+
+  String _chipLabel() {
+    if (score >= 75) return '🔥 HIGH IMPACT';
+    if (score >= 50) return '⚡ MED IMPACT';
+    return '📊 $score/100';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final color = _chipColor();
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.12),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withOpacity(0.35), width: 1),
+      ),
+      child: Text(
+        _chipLabel(),
+        style: TextStyle(
+          fontSize: 10,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 0.8,
+          color: color,
+        ),
+      ),
+    );
+  }
+}
+
 // ─── Animated divider ─────────────────────────────────────────────────────────
 
-/// The bright stop of the gradient travels from the left edge (progress=0)
-/// to the right edge (progress=tabCount-1), tracking the PageView scroll
-/// continuously — not just on snapped page changes.
 class _AnimatedDivider extends StatelessWidget {
   final Color color;
-  final double progress;   // 0.0 … tabCount-1
+  final double progress;
   final int tabCount;
 
   const _AnimatedDivider({
@@ -261,28 +331,17 @@ class _AnimatedDivider extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Normalise to 0.0–1.0
     final t = (progress / (tabCount - 1)).clamp(0.0, 1.0);
-
-    // Bright spot width as fraction of total line
     const spotWidth = 0.30;
-
-    // Centre of the bright spot travels from 0 to 1
     final spotCenter = t;
-    final spotLeft  = (spotCenter - spotWidth / 2).clamp(0.0, 1.0);
+    final spotLeft = (spotCenter - spotWidth / 2).clamp(0.0, 1.0);
     final spotRight = (spotCenter + spotWidth / 2).clamp(0.0, 1.0);
 
     return Container(
       height: 1,
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          stops: [
-            0.0,
-            spotLeft,
-            spotCenter,
-            spotRight,
-            1.0,
-          ],
+          stops: [0.0, spotLeft, spotCenter, spotRight, 1.0],
           colors: [
             Colors.transparent,
             color.withOpacity(0.08),
@@ -296,7 +355,72 @@ class _AnimatedDivider extends StatelessWidget {
   }
 }
 
-// ─── Sub-widgets ──────────────────────────────────────────────────────────────
+// ─── Scrollable text content box ──────────────────────────────────────────────
+
+class _ScrollableText extends StatelessWidget {
+  final String text;
+  final Color color;
+  final String icon;
+  final String label;
+  final bool italic;
+
+  const _ScrollableText({
+    super.key,
+    required this.text,
+    required this.color,
+    required this.icon,
+    required this.label,
+    this.italic = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      physics: const BouncingScrollPhysics(),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(18),
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.07),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: color.withOpacity(0.25), width: 1),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              children: [
+                Text(icon, style: const TextStyle(fontSize: 16)),
+                const SizedBox(width: 8),
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 1.2,
+                    color: color,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Text(
+              text.isEmpty ? 'No content available.' : text,
+              style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                    fontStyle:
+                        italic ? FontStyle.italic : FontStyle.normal,
+                    height: 1.65,
+                  ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Category badge ───────────────────────────────────────────────────────────
 
 class _CategoryBadge extends StatelessWidget {
   final String label;
@@ -339,6 +463,8 @@ class _CategoryBadge extends StatelessWidget {
   }
 }
 
+// ─── Source badge ─────────────────────────────────────────────────────────────
+
 class _SourceBadge extends StatelessWidget {
   final String source;
 
@@ -358,159 +484,18 @@ class _SourceBadge extends StatelessWidget {
           ),
         ),
         const SizedBox(width: 6),
-        Text(
-          source,
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                fontWeight: FontWeight.w600,
-                color: AppColors.textSecondary,
-              ),
+        Flexible(
+          child: Text(
+            source,
+            overflow: TextOverflow.ellipsis,
+            maxLines: 1,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textSecondary,
+                ),
+          ),
         ),
       ],
-    );
-  }
-}
-
-class _BulletList extends StatelessWidget {
-  final List<String> bullets;
-  final Color color;
-
-  const _BulletList({required this.bullets, required this.color});
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: bullets.asMap().entries.map((entry) {
-        return Padding(
-          padding: const EdgeInsets.only(bottom: 16),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                width: 24,
-                height: 24,
-                margin: const EdgeInsets.only(top: 2, right: 12),
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: color.withOpacity(0.15),
-                  border: Border.all(color: color.withOpacity(0.5), width: 1),
-                ),
-                child: Center(
-                  child: Text(
-                    '${entry.key + 1}',
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                      color: color,
-                    ),
-                  ),
-                ),
-              ),
-              Expanded(
-                child: Text(
-                  entry.value,
-                  style: Theme.of(context).textTheme.bodyLarge,
-                ),
-              ),
-            ],
-          ),
-        );
-      }).toList(),
-    );
-  }
-}
-
-class _Eli5Content extends StatelessWidget {
-  final String content;
-  final Color color;
-
-  const _Eli5Content({required this.content, required this.color});
-
-  @override
-  Widget build(BuildContext context) {
-    return _StyledBox(
-      color: color,
-      icon: '🧒',
-      label: 'Explained Simply',
-      child: Text(
-        content,
-        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-              color: AppColors.textPrimary,
-              fontStyle: FontStyle.italic,
-              height: 1.7,
-            ),
-      ),
-    );
-  }
-}
-
-class _EmptyTabBox extends StatelessWidget {
-  final String icon;
-  final String label;
-  final Color color;
-
-  const _EmptyTabBox({
-    required this.icon,
-    required this.label,
-    required this.color,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return _StyledBox(
-      color: color,
-      icon: icon,
-      label: label,
-      child: const SizedBox.shrink(),
-    );
-  }
-}
-
-class _StyledBox extends StatelessWidget {
-  final Color color;
-  final String icon;
-  final String label;
-  final Widget child;
-
-  const _StyledBox({
-    required this.color,
-    required this.icon,
-    required this.label,
-    required this.child,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.07),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: color.withOpacity(0.25), width: 1),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Row(
-            children: [
-              Text(icon, style: const TextStyle(fontSize: 18)),
-              const SizedBox(width: 8),
-              Text(
-                label,
-                style: Theme.of(context)
-                    .textTheme
-                    .labelLarge
-                    ?.copyWith(color: color, fontSize: 11),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          child,
-        ],
-      ),
     );
   }
 }
@@ -519,11 +504,11 @@ class _StyledBox extends StatelessWidget {
 
 class _CategoryDropdown extends StatelessWidget {
   final Color categoryColor;
-  final VoidCallback onClose;
+  final ValueChanged<String> onSelect;
 
   const _CategoryDropdown({
     required this.categoryColor,
-    required this.onClose,
+    required this.onSelect,
   });
 
   @override
@@ -550,7 +535,8 @@ class _CategoryDropdown extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 16, vertical: 8),
               child: Text(
                 'SWITCH FEED',
                 style: TextStyle(
@@ -566,7 +552,7 @@ class _CategoryDropdown extends StatelessWidget {
             ..._kCategories.map((cat) => _DropdownItem(
                   label: cat,
                   isMyDigest: cat == 'MyDigest',
-                  onTap: onClose,
+                  onTap: () => onSelect(cat),
                 )),
             const SizedBox(height: 4),
           ],
@@ -593,29 +579,34 @@ class _DropdownItem extends StatelessWidget {
       onTap: onTap,
       borderRadius: BorderRadius.circular(10),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        padding:
+            const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         child: Row(
           children: [
-            Text(_categoryIcon(label), style: const TextStyle(fontSize: 16)),
+            Text(_icon(label), style: const TextStyle(fontSize: 16)),
             const SizedBox(width: 12),
             Expanded(
               child: Text(
                 label,
                 style: TextStyle(
                   fontSize: 14,
-                  fontWeight: isMyDigest ? FontWeight.w700 : FontWeight.w500,
-                  color: isMyDigest ? AppColors.neonGreen : AppColors.textPrimary,
+                  fontWeight:
+                      isMyDigest ? FontWeight.w700 : FontWeight.w500,
+                  color: isMyDigest
+                      ? AppColors.neonGreen
+                      : AppColors.textPrimary,
                 ),
               ),
             ),
             if (isMyDigest)
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 7, vertical: 2),
                 decoration: BoxDecoration(
                   color: AppColors.neonGreen.withOpacity(0.15),
                   borderRadius: BorderRadius.circular(6),
                 ),
-                child: Text(
+                child: const Text(
                   'DEFAULT',
                   style: TextStyle(
                     fontSize: 8,
@@ -631,7 +622,7 @@ class _DropdownItem extends StatelessWidget {
     );
   }
 
-  String _categoryIcon(String cat) {
+  String _icon(String cat) {
     const icons = {
       'MyDigest': '⭐',
       'Markets': '📈',
